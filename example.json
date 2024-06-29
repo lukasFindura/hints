@@ -1,0 +1,45 @@
+{
+    "name": "hints",
+    "item": [
+      {
+        "name": "File Operations",
+        "item": [
+          {
+            "name": "List Files",
+            "command": "ls -la"
+          },
+          {
+            "name": "Print Working Directory",
+            "command": "pwd"
+          }
+        ]
+      },
+      {
+        "name": "System Information",
+        "item": [
+          {
+            "name": "Current User",
+            "command": "whoami"
+          },
+          {
+            "name": "Disk Usage",
+            "command": "df -h"
+          }
+        ]
+      },
+      {
+        "name": "Basic Commands",
+        "item": [
+          {
+            "name": "Print Hello Message",
+            "command": "echo Hello"
+          },
+          {
+            "name": "Display Date and Time",
+            "command": "date"
+          }
+        ]
+      }
+    ]
+  }
+  
