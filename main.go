@@ -56,13 +56,20 @@ func createMenu(name string, indent int, subItems []Data) *gocliselect.Menu {
 
 func main() {
 
+	// Ensure that a file path is provided as an argument
+	if len(os.Args) < 2 {
+		fmt.Printf("Usage: %s <path to config>\n", os.Args[0])
+		os.Exit(1)
+	}
+
 	gocliselect.Cursor.ItemPrompt = "❯"
 	gocliselect.Cursor.SubMenuPrompt = "❯"
 	gocliselect.Cursor.ItemColor = goterm.YELLOW
 	gocliselect.Cursor.SubMenuColor = goterm.CYAN
 	gocliselect.Cursor.Suffix = " "
 
-	path := "example.json"
+	// Get the file path from the command line argument
+	path := os.Args[1]
 
 	// Read JSON file
 	root, err := ReadJSONFile(path)
@@ -118,4 +125,9 @@ func main() {
 		lastMenu, choice = lastMenu.Display(rootMenu)
 
 	}
+	// exit received, clean the menu options
+	goterm.MoveCursorUp(gocliselect.LinesOnInput)
+	// clear screen from cursor down
+	fmt.Fprint(goterm.Screen, "\033[0J")
+	goterm.Flush()
 }

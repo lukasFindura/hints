@@ -10,3 +10,5 @@ require (
 	github.com/pkg/term v1.1.0 // indirect
 	golang.org/x/sys v0.1.0 // indirect
 )
+
+replace github.com/lukasFindura/gocliselect => /Users/lfindura/golang/src/github.com/lukasFindura/gocliselect
