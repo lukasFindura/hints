@@ -7,19 +7,24 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
 	"github.com/buger/goterm"
 	"github.com/google/goterm/term"
 	"github.com/lukasFindura/gocliselect"
+	"gopkg.in/yaml.v3"
 )
 
 type Data struct {
-	Item     string `json:"name"`
-	Command  string `json:"command,omitempty"`
-	SubItems []Data `json:"item,omitempty"`
+	Item     string `json:"name" yaml:"name"`
+	Command  string `json:"command,omitempty" yaml:"command,omitempty"`
+	SubItems []Data `json:"item,omitempty" yaml:"item,omitempty"`
 }
+
+const USAGE = "Usage: %s <file>\n  - file: Input file in JSON (.json) or YAML (.yaml)\n"
+
 
 // ReadJSONFile reads JSON data from a file specified by filePath
 func ReadJSONFile(filePath string) (Data, error) {
@@ -31,8 +36,18 @@ func ReadJSONFile(filePath string) (Data, error) {
 		return item, err
 	}
 
-	// Unmarshal JSON into the Data struct
-	err = json.Unmarshal(data, &item)
+	// Parse based on file extension
+	ext := filepath.Ext(filePath)
+	switch ext {
+	case ".json":
+		err = json.Unmarshal(data, &item)
+	case ".yaml":
+		err = yaml.Unmarshal(data, &item)
+	default:
+		fmt.Printf("wrong extension: %s\n\n", ext)
+		fmt.Printf(USAGE, os.Args[0])
+		os.Exit(1)
+	}
 	if err != nil {
 		return item, err
 	}
@@ -58,7 +73,7 @@ func main() {
 
 	// Ensure that a file path is provided as an argument
 	if len(os.Args) < 2 {
-		fmt.Printf("Usage: %s <path to config>\n", os.Args[0])
+		fmt.Printf(USAGE, os.Args[0])
 		os.Exit(1)
 	}
 
@@ -84,19 +99,29 @@ func main() {
 
 	for choice != nil {
 
-		var cmd string
+		var cmd string = choice.ID
 		var args []string
+		var verbose bool = true
 
-		// scripts starts with '!'
-		if strings.HasPrefix(choice.ID, "!") {
-			cmd = strings.TrimPrefix(choice.ID, "!")
+		// scripts starts with '!' - script file
+		if strings.HasPrefix(cmd, "!") {
+			cmd = strings.TrimPrefix(cmd, "!")
 		} else {
-			cmd, args = "bash", []string{"-c", fmt.Sprintf(". ~/.bash_profile; %s", choice.ID)}
+			// scripts starts with '_' - do not print the command being executed
+			if strings.HasPrefix(cmd, "_") {
+				cmd = strings.TrimPrefix(cmd, "_")
+				verbose = false
+			}
+			// fail if any command in the pipe fails (-o pipefail)
+			cmd, args = "bash", []string{"-co", "pipefail", fmt.Sprintf(". ~/.bash_profile; %s", cmd)}
 		}
 
-		// italic and gray color
-		text := term.Italic(fmt.Sprintf("\033[90mrunning… %s\033[0m\n", choice.ID))
-		fmt.Print(text)
+		if verbose {
+			// italic and gray color
+			fmt.Println(term.Italic(fmt.Sprintf("\033[90mrunning… %s\033[0m", choice.ID)))
+		} else {
+			fmt.Println()
+		}
 		out := exec.Command(cmd, args...)
 
 		// https://stackoverflow.com/questions/18106749/golang-catch-signals
@@ -118,10 +143,11 @@ func main() {
 		out.Stdin = os.Stdin
 		err := out.Run()
 		if err != nil {
-			fmt.Println(err.Error())
-			// os.Exit(1)
+			err_msg := fmt.Sprintf("\033[31m%s\033[0m", err.Error())
+			fmt.Println(err_msg)
 		}
 
+		fmt.Println()  // empty line before showing menu again
 		lastMenu, choice = lastMenu.Display(rootMenu)
 
 	}
