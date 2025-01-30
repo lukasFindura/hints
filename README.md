@@ -7,7 +7,11 @@ go run main.go example.json
 
 ### config
 See `example.json` for the structure.
-Note that command prefixed with `!` is a path to a script to be run. E.g.:
+
+Behavior if command is prefixed with:
+
+`_` - doesn't print command being ran
+`!` - path to a script to be run. E.g.:
 ```json
 {
     "name": "script",
@@ -18,43 +22,23 @@ Note that command prefixed with `!` is a path to a script to be run. E.g.:
 ## `pick` extension
 
 `hints`' dependency `gocliselect` can be used as hint as well.
+
+`pick` prints menu to stderr, user's choice to stdout.
+
 E.g. you can have:
 ```json
 {
     "name": "pick file",
-    "command": "ls | pick"
-}
-```
-To capture user's choice, utilities like `grep` or `awk` won't work given the way `gocliselect` is implemented (clearing and redrawing console prompt and waiting for user's input).
-Other tools have also their limitations:
-- `tee` appends every change to stdout (redrawing lines causes duplicated lines)
-- `script` captures all the escape codes and might be difficult to trim them at the right place
-
-Therefore, `pick` simply prints user's choice to stderr which can be written to a file.
-
-```json
-{
-    "name": "pick file",
-    "command": "ls | pick 2> /tmp/pick"
+    "command": "choice=`ls | pick` ; echo $choice"
 }
 ```
 
-<details>
-<summary><b>alternative - <i>script</i> utility</b></summary>
-
-```json
-{
-    "name": "pick file",
-    "command": "script -q /tmp/pick bash -c \"'ls' | pick\" && grep 'Picked:' /tmp/pick | awk '{print $2}' | tr -d '\r'"
-}
+It can be used as a standalone utility too (not necessarily in `hints`).
+```bash
+alias example='choice=`ls | pick2` ; vi $choice'
 ```
 
-`script` captures the output of the command to a temporary file.
- Wrapper `bash -c` is usually needed only if the command is actually a pipe - more commands chained together.
- Note that removing `\r` is usually needed as `script` captures all keycodes - includins escaped ones (gocliselect is using a lot of them to manipulate the position of the cursor).
-
-</details>
-
+### `pick` install
  ```bash
 mkdir pick; cd pick
  ```
@@ -68,6 +52,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+
 	"github.com/buger/goterm"
 	"github.com/lukasFindura/gocliselect"
 )
@@ -75,8 +60,41 @@ import (
 func main() {
 
 	gocliselect.Cursor.ItemPrompt = "❯"
-	gocliselect.Cursor.ItemColor = goterm.YELLOW
+	if prompt := os.Getenv("PICK_PROMPT"); prompt != "" {
+		gocliselect.Cursor.ItemPrompt = prompt
+	}
+	envColor := os.Getenv("PICK_COLOR")
+
+	// Variable to store the Goterm color
+	var selectedColor int
+
+	// Switch to map environment values to Goterm colors
+	switch envColor {
+	case "red":
+		selectedColor = goterm.RED
+	case "green":
+		selectedColor = goterm.GREEN
+	case "blue":
+		selectedColor = goterm.BLUE
+	case "yellow":
+		selectedColor = goterm.YELLOW
+	case "magenta":
+		selectedColor = goterm.MAGENTA
+	case "cyan":
+		selectedColor = goterm.CYAN
+	case "white":
+		selectedColor = goterm.WHITE
+	default:
+		// Set a default color if the environment variable is invalid or not set
+		selectedColor = gocliselect.Cursor.ItemColor
+	}
+	gocliselect.Cursor.ItemColor = selectedColor
 	gocliselect.Cursor.Suffix = " "
+
+	var verbose = false
+	if verbose_ := os.Getenv("PICK_VERBOSE"); verbose_ != "" {
+		verbose = true
+	}
 
 	// Check if input is coming from a pipe
 	stat, _ := os.Stdin.Stat()
@@ -100,8 +118,14 @@ func main() {
 
 	// Display the menu
 	if _, choice := menu.Display(menu); choice != nil {
-		fmt.Printf("\nPicked: %s\n", choice.Text)
-		fmt.Fprint(os.Stderr, choice.Text)
+		if verbose {
+			fmt.Printf("\nPicked: %s\n", choice.Text)
+		}
+		// Print user's choice
+		fmt.Print(choice.Text)
+	} else {
+		// User canceled choice
+		os.Exit(1)
 	}
 }
 ```
@@ -112,6 +136,13 @@ func main() {
 go mod init github.com/lukasFindura/pick
 go mod tidy
 go install
+```
+
+#### optional configuration:
+```bash
+export PICK_PROMPT=...   # prompt char
+export PICK_COLOR=...    # prompt color
+export PICK_VERBOSE=...  # prints choice if set (default is false)
 ```
 
 ### `pick-less` extension
@@ -141,7 +172,7 @@ Use `PICKLESS_SIZE` env var to set batch size (default is 20).
 clear_stdout() {
   local lines_to_clear=$1
   for ((i = 0; i < lines_to_clear; i++)); do
-    echo -en "\033[F\033[2K" # Move up and clear the line
+    echo -en "\033[F\033[2K" >&2 # Move up and clear the line
   done
 }
 
@@ -190,11 +221,8 @@ while true; do
   # Count the number of lines in the current chunk
   lines_in_chunk=$(echo -e "$chunk_text" | wc -l)
 
-  # Run `pick` with the chunk, capturing stderr to a temporary file
-  echo -e "$chunk_text" | pick 2>/tmp/pick-less
-
-  # Read the choice from the stderr temporary file
-  choice=$(cat /tmp/pick-less)
+  # Run pick with the chunk, capture the choice
+  choice=$(echo -e "$chunk_text" | pick) || exit 1
 
   # Handle navigation
   if [[ "$choice" == "$next_marker" ]]; then
@@ -218,7 +246,8 @@ while true; do
     break
   fi
 done
-cat /tmp/pick-less >&2
 
+# Print choice on the output
+echo $choice
 ```
 </details>

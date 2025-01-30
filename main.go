@@ -118,7 +118,7 @@ func main() {
 
 		if verbose {
 			// italic and gray color
-			fmt.Println(term.Italic(fmt.Sprintf("\033[90mrunning… %s\033[0m", choice.ID)))
+			fmt.Println(term.Italic(fmt.Sprintf("\033[90m%s\033[0m", choice.ID)))
 		} else {
 			fmt.Println()
 		}
